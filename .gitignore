@@ -1,0 +1,6 @@
+node_modules
+auth
+database
+*.mp3
+*.mp4
+pm2.log
