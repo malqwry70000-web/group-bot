@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+global.crypto = crypto;
 const http = require("http")
 http.createServer((req,res)=>res.end("Bot Live")).listen(process.env.PORT||3000)
 
