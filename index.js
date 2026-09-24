@@ -6,6 +6,8 @@ http.createServer((req,res)=>res.end("Bot Live")).listen(process.env.PORT||3000)
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const P = require("pino")
 
+let pairingRequested = false; // عشان ما يطلب اكثر من مرة
+
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState("auth")
   const sock = makeWASocket({
@@ -15,27 +17,40 @@ async function start() {
     browser: ["Ubuntu", "Chrome", "20.0"]
   })
 
-  if (!sock.authState.creds.registered) {
-    const num = process.env.PHONE_NUMBER
-    if (num) {
-      console.log("طلب كود للرقم:", num)
-      setTimeout(async () => {
-        try {
-          const code = await sock.requestPairingCode(num)
-          console.log(`\n====================`)
-          console.log(`🔑 كودك: ${code}`)
-          console.log(`====================\n`)
-          console.log("واتساب > الاجهزة المرتبطة > ربط برقم الهاتف")
-        } catch (e) { console.log("خطأ:", e.message) }
-      }, 3000)
-    }
+  sock.ev.on("creds.update", saveCreds)
+
+  if (!sock.authState.creds.registered &&!pairingRequested) {
+    pairingRequested = true
+    const num = "967738100848" // رقمك بدون +
+    console.log("جاري طلب الكود للرقم:", num)
+
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(num)
+        console.log(`\n====================`)
+        console.log(`🔑 كودك: ${code}`)
+        console.log(`====================\n`)
+        console.log("معك دقيقة واحدة فقط ادخله!")
+      } catch (e) {
+        console.log("خطأ:", e.message)
+        pairingRequested = false // يسمح يحاول بعدين
+      }
+    }, 8000) // ينتظر 8 ثواني عشان يثبت الاتصال
   }
 
-  sock.ev.on("creds.update", saveCreds)
   sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
-    if (connection === "open") console.log("✅ ارتبط! شغال 24/7")
+    if (connection === "open") {
+      console.log("✅ ارتبط! شغال 24/7")
+      pairingRequested = false
+    }
     if (connection === "close") {
-      if (lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut) start()
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut
+      console.log("انقطع الاتصال، اعادة تشغيل بعد 15 ثانية...")
+      if(shouldReconnect){
+        setTimeout(start, 15000) // كان يعيد بسرعة، الحين 15 ثانية
+      }else{
+        console.log("تم تسجيل الخروج")
+      }
     }
   })
 
